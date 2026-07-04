@@ -521,3 +521,28 @@
     </script>
 </body>
 </html>
+<div id="player" style="position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none;"></div>
+<script src="https://www.youtube.com/iframe_api"></script>
+
+<script>
+let youtubePlayer;
+
+function onYouTubeIframeAPIReady() {
+    youtubePlayer = new YT.Player('player', {
+        videoId: 'jbTj2M3vmts',
+        playerVars: {
+            'loop': 1,
+            'playlist': 'jbTj2M3vmts',
+            'controls': 0,
+            'disablekb': 1
+        }
+    });
+}
+</script>
+<script>
+document.addEventListener('click', function() {
+    if (youtubePlayer && typeof youtubePlayer.playVideo === 'function') {
+        youtubePlayer.playVideo();
+    }
+}, { once: true }); // This makes sure it only triggers on the very first click!
+</script>
