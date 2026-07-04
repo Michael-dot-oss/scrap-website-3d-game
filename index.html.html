@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collector</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #111;
+            color: white;
+            user-select: none;
+        }
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(15, 15, 25, 0.95);
+            z-index: 10;
+        }
+        .hidden { display: none !important; }
+        h1 {
+            font-size: 4rem;
+            margin-bottom: 2rem;
+            letter-spacing: 5px;
+            color: #00ffcc;
+            text-shadow: 0 0 10px rgba(0,255,204,0.5);
+        }
+        button {
+            background: #222;
+            color: #fff;
+            border: 2px solid #00ffcc;
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            margin: 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            width: 250px;
+            transition: all 0.2s ease;
+        }
+        button:hover {
+            background: #00ffcc;
+            color: #111;
+            box-shadow: 0 0 15px #00ffcc;
+            transform: scale(1.05);
+        }
+        .back-btn { margin-top: 30px; border-color: #ff0055; }
+        .back-btn:hover { background: #ff0055; color: white; box-shadow: 0 0 15px #ff0055; }
+        .rainbow-text {
+            font-weight: bold;
+            font-size: 2.5rem;
+            background: linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-size: 400% 400%;
+            animation: rainbow 5s ease infinite;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        @keyframes rainbow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 2px 2px 4px #000;
+            z-index: 5;
+            pointer-events: none;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            border: 2px solid rgba(255,255,255,0.7);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 5;
+            pointer-events: none;
+        }
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.6);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 1rem;
+            pointer-events: none;
+            text-align: center;
+        }
+        #canvas-container { width: 100%; height: 100%; position: absolute; top:0; left:0; z-index: 1; }
+    </style>
+</head>
+<body>
+
+    <div id="hud" class="hidden">Coins: <span id="coin-count">0</span></div>
+    <div id="crosshair" class="hidden"></div>
+    <div id="instructions" class="hidden">WASD to Move | Move Mouse to Look | Click Scraps to Collect | Walk inside the Shop entrance</div>
+
+    <div id="main-menu" class="screen">
+        <h1>COLLECTOR</h1>
+        <button id="play-btn">PLAY</button>
+        <button id="settings-btn">SETTINGS</button>
+        <button id="credits-btn">CREDITS</button>
+    </div>
+
+    <div id="settings-screen" class="screen hidden">
+        <h1>SETTINGS</h1>
+        <p style="font-size: 1.2rem; max-width: 500px; text-align: center;">
+            Mouse Sensitivity: Standard<br><br>
+            Graphics: High (WebGL)<br><br>
+            Controls: W/A/S/D to move around the map.
+        </p>
+        <button class="back-btn" onclick="showScreen('main-menu')">BACK</button>
+    </div>
+
+    <div id="credits-screen" class="screen hidden">
+        <h1>CREDITS</h1>
+        <p style="font-size: 1.5rem;">Game Created By:</p>
+        <div class="rainbow-text">MICHAEL</div>
+        <button class="back-btn" onclick="showScreen('main-menu')">BACK</button>
+    </div>
+
+    <div id="shop-screen" class="screen hidden">
+        <h1>SHOP</h1>
+        <h2 style="color: #ffaa00; letter-spacing: 2px;">⚠️ WORK IN PROGRESS ⚠️</h2>
+        <p style="color: #aaa;">I don't know what to put here yet!</p>
+        <button class="back-btn" onclick="closeShop()">CLOSE SHOP</button>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        // --- UI Navigation ---
+        function showScreen(screenId) {
+            // Hide all menus
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('settings-screen').classList.add('hidden');
+            document.getElementById('credits-screen').classList.add('hidden');
+            document.getElementById('shop-screen').classList.add('hidden');
+            
+            // Show the targeted menu
+            document.getElementById(screenId).classList.remove('hidden');
+        }
+
+        // Connect menu items explicitly using modern event listeners
+        document.getElementById('settings-btn').addEventListener('click', () => showScreen('settings-screen'));
+        document.getElementById('credits-btn').addEventListener('click', () => showScreen('credits-screen'));
+        document.getElementById('play-btn').addEventListener('click', () => startGame());
+
+        function startGame() {
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+            document.getElementById('crosshair').classList.remove('hidden');
+            document.getElementById('instructions').classList.remove('hidden');
+            
+            // Lock pointer smoothly on click confirmation
+            setTimeout(() => {
+                document.body.requestPointerLock();
+            }, 50);
+            
+            gameActive = true;
+        }
+
+        function closeShop() {
+            document.getElementById('shop-screen').classList.add('hidden');
+            document.body.requestPointerLock();
+            camera.position.z = -10; 
+            gameActive = true;
+        }
+
+        // --- Game Setup Engine ---
+        let scene, camera, renderer, gameActive = false;
+        let coins = 0;
+        let scraps = [];
+        let clouds = [];
+        let shopTriggerZone;
+        let keys = { w: false, a: false, s: false, d: false };
+        let moveSpeed = 0.15;
+        let cameraPitch = 0;
+        let cameraYaw = 0;
+        let collectorTool;
+        let toolRecoil = 0;
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            
+            scene.background = new THREE.Color(0x66aaff); 
+            scene.fog = new THREE.FogExp2(0x66aaff, 0.01);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 2, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+            
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            dirLight.position.set(20, 40, 20);
+            scene.add(dirLight);
+
+            // Ground setup
+            const floorGeo = new THREE.PlaneGeometry(100, 100);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x224422, roughness: 0.9 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+
+            const grid = new THREE.GridHelper(100, 50, 0xffffff, 0x557755);
+            grid.position.y = 0.01;
+            scene.add(grid);
+
+            spawnScraps(30);
+            buildCoolShop();
+            generateClouds();
+            createCollectorTool();
+
+            window.addEventListener('resize', onWindowResize);
+            document.addEventListener('keydown', (e) => handleInput(e, true));
+            document.addEventListener('keyup', (e) => handleInput(e, false));
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mousedown', tryCollectScrap);
+
+            document.addEventListener('pointerlockchange', () => {
+                // If player drops out of lock, and isn't looking at the shop, send back to Main Menu safely
+                if (document.pointerLockElement !== document.body) {
+                    if(document.getElementById('shop-screen').classList.contains('hidden')) {
+                        gameActive = false;
+                        showScreen('main-menu');
+                    }
+                }
+            });
+
+            animate();
+        }
+
+        function createCollectorTool() {
+            collectorTool = new THREE.Group();
+            const metalMat = new THREE.MeshStandardMaterial({ color: 0x888899, metalness: 0.8, roughness: 0.2 });
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x222225, metalness: 0.5, roughness: 0.5 });
+            const glassMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.4, roughness: 0.1 });
+            const glowMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc });
+
+            const bodyGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.6, 16);
+            const body = new THREE.Mesh(bodyGeo, metalMat);
+            body.rotation.x = Math.PI / 2;
+            collectorTool.add(body);
+
+            const glassGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.3, 16);
+            const glass = new THREE.Mesh(glassGeo, glassMat);
+            glass.rotation.x = Math.PI / 2;
+            glass.position.z = 0.15;
+            collectorTool.add(glass);
+
+            const coreGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.32, 8);
+            const core = new THREE.Mesh(coreGeo, glowMat);
+            core.rotation.x = Math.PI / 2;
+            core.position.z = 0.15;
+            collectorTool.add(core);
+
+            const gripGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.25, 12);
+            const grip = new THREE.Mesh(gripGeo, darkMat);
+            grip.position.set(0, -0.18, -0.1);
+            grip.rotation.x = Math.PI / 6;
+            collectorTool.add(grip);
+
+            const nozzleGeo = new THREE.ConeGeometry(0.22, 0.3, 16, 1, true);
+            const nozzle = new THREE.Mesh(nozzleGeo, metalMat);
+            nozzle.rotation.x = -Math.PI / 2;
+            nozzle.position.z = 0.45;
+            collectorTool.add(nozzle);
+
+            collectorTool.position.set(-0.35, -0.25, -0.6);
+            camera.add(collectorTool);
+            scene.add(camera); 
+        }
+
+        function generateClouds() {
+            const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
+            for (let i = 0; i < 15; i++) {
+                const group = new THREE.Group();
+                const puffCount = 3 + Math.floor(Math.random() * 4);
+                for (let j = 0; j < puffCount; j++) {
+                    const radius = 2 + Math.random() * 3;
+                    const geo = new THREE.SphereGeometry(radius, 7, 7);
+                    const puff = new THREE.Mesh(geo, cloudMat);
+                    puff.position.set((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 6);
+                    group.add(puff);
+                }
+                group.position.set((Math.random() - 0.5) * 120, 15 + Math.random() * 10, (Math.random() - 0.5) * 120);
+                group.userData = { speed: 0.01 + Math.random() * 0.015 };
+                scene.add(group);
+                clouds.push(group);
+            }
+        }
+
+        function buildCoolShop() {
+            const shopGroup = new THREE.Group();
+            shopGroup.position.set(0, 0, -20);
+
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0x33333b, roughness: 0.5 });
+            const neonYellowMat = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xffff00, emissiveIntensity: 0.6 });
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0x1e1e24 });
+
+            const backWall = new THREE.Mesh(new THREE.BoxGeometry(10, 6, 0.5), wallMat);
+            backWall.position.set(0, 3, -5);
+            shopGroup.add(backWall);
+
+            const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 6, 10), wallMat);
+            leftWall.position.set(-5, 3, 0);
+            shopGroup.add(leftWall);
+
+            const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 6, 10), wallMat);
+            rightWall.position.set(5, 3, 0);
+            shopGroup.add(rightWall);
+
+            const frontWallLeft = new THREE.Mesh(new THREE.BoxGeometry(3.5, 6, 0.5), wallMat);
+            frontWallLeft.position.set(-3.25, 3, 5);
+            shopGroup.add(frontWallLeft);
+
+            const frontWallRight = new THREE.Mesh(new THREE.BoxGeometry(3.5, 6, 0.5), wallMat);
+            frontWallRight.position.set(3.25, 3, 5);
+            shopGroup.add(frontWallRight);
+
+            const roof = new THREE.Mesh(new THREE.BoxGeometry(11, 0.5, 11), roofMat);
+            roof.position.set(0, 6, 0);
+            shopGroup.add(roof);
+
+            const pillarGeo = new THREE.CylinderGeometry(0.2, 0.2, 6, 8);
+            const pillarL = new THREE.Mesh(pillarGeo, neonYellowMat);
+            pillarL.position.set(-4.8, 3, 4.8);
+            const pillarR = new THREE.Mesh(pillarGeo, neonYellowMat);
+            pillarR.position.set(4.8, 3, 4.8);
+            shopGroup.add(pillarL, pillarR);
+
+            const signGroup = new THREE.Group();
+            signGroup.position.set(0, 7, 4.5);
+            const letterWeight = 0.2;
+
+            function makeBar(w, h, d, x, y) {
+                const bar = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), neonYellowMat);
+                bar.position.set(x, y, 0);
+                signGroup.add(bar);
+            }
+
+            makeBar(1, letterWeight, 0.2, -2, 0.8);
+            makeBar(letterWeight, 0.5, 0.2, -2.4, 0.55);
+            makeBar(1, letterWeight, 0.2, -2, 0.3);
+            makeBar(letterWeight, 0.5, 0.2, -1.6, 0.05);
+            makeBar(1, letterWeight, 0.2, -2, -0.2);
+
+            makeBar(letterWeight, 1.2, 0.2, -0.8, 0.3);
+            makeBar(0.6, letterWeight, 0.2, -0.5, 0.3);
+            makeBar(letterWeight, 1.2, 0.2, -0.2, 0.3);
+
+            makeBar(0.8, letterWeight, 0.2, 0.5, 0.8);
+            makeBar(letterWeight, 1, 0.2, 0.1, 0.3);
+            makeBar(letterWeight, 1, 0.2, 0.9, 0.3);
+            makeBar(0.8, letterWeight, 0.2, 0.5, -0.2);
+
+            makeBar(letterWeight, 1.2, 0.2, 1.5, 0.3);
+            makeBar(0.6, letterWeight, 0.2, 1.8, 0.8);
+            makeBar(0.6, letterWeight, 0.2, 1.8, 0.3);
+            makeBar(letterWeight, 0.5, 0.2, 2.1, 0.55);
+
+            shopGroup.add(signGroup);
+            scene.add(shopGroup);
+
+            const triggerGeo = new THREE.SphereGeometry(1.5);
+            const triggerMat = new THREE.MeshBasicMaterial({ visible: false });
+            shopTriggerZone = new THREE.Mesh(triggerGeo, triggerMat);
+            shopTriggerZone.position.set(0, 1.5, -15); 
+            scene.add(shopTriggerZone);
+        }
+
+        function spawnScraps(count) {
+            const geometry = new THREE.DodecahedronGeometry(0.4);
+            const material = new THREE.MeshStandardMaterial({ color: 0xff3300, metalness: 0.7, roughness: 0.2, emissive: 0xff3300, emissiveIntensity: 0.2 });
+
+            for(let i=0; i<count; i++) {
+                const scrap = new THREE.Mesh(geometry, material);
+                scrap.position.x = (Math.random() - 0.5) * 80;
+                scrap.position.z = (Math.random() - 0.5) * 80;
+                scrap.position.y = 0.5 + Math.random() * 1;
+
+                if (Math.abs(scrap.position.x) < 8 && Math.abs(scrap.position.z) < 25) {
+                    scrap.position.x += 15;
+                }
+
+                scene.add(scrap);
+                scraps.push(scrap);
+            }
+        }
+
+        function handleInput(event, isDown) {
+            switch(event.code) {
+                case 'KeyW': keys.w = isDown; break;
+                case 'KeyA': keys.a = isDown; break;
+                case 'KeyS': keys.s = isDown; break;
+                case 'KeyD': keys.d = isDown; break;
+            }
+        }
+
+        function handleMouseMove(event) {
+            if (document.pointerLockElement !== document.body || !gameActive) return;
+
+            const sensitivity = 0.002;
+            cameraYaw -= event.movementX * sensitivity;
+            cameraPitch -= event.movementY * sensitivity;
+            cameraPitch = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, cameraPitch));
+
+            camera.quaternion.setFromEuler(new THREE.Euler(cameraPitch, cameraYaw, 0, 'YXZ'));
+        }
+
+        function tryCollectScrap() {
+            if (document.pointerLockElement !== document.body || !gameActive) return;
+
+            const raycaster = new THREE.Raycaster();
+            const centerPoint = new THREE.Vector2(0, 0); 
+            raycaster.setFromCamera(centerPoint, camera);
+
+            const intersects = raycaster.intersectObjects(scraps);
+
+            if (intersects.length > 0) {
+                const targetScrap = intersects[0].object;
+                if(camera.position.distanceTo(targetScrap.position) < 7) {
+                    scene.remove(targetScrap);
+                    scraps = scraps.filter(s => s !== targetScrap);
+                    coins++;
+                    document.getElementById('coin-count').innerText = coins;
+                    spawnScraps(1);
+                    toolRecoil = 0.12;
+                }
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            scraps.forEach(scrap => {
+                scrap.rotation.x += 0.01;
+                scrap.rotation.y += 0.01;
+            });
+
+            clouds.forEach(cloud => {
+                cloud.position.x += cloud.userData.speed;
+                if (cloud.position.x > 70) {
+                    cloud.position.x = -70;
+                }
+            });
+
+            if (gameActive) {
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                forward.y = 0;
+                forward.normalize();
+
+                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                right.y = 0;
+                right.normalize();
+
+                if (keys.w) camera.position.addScaledVector(forward, moveSpeed);
+                if (keys.s) camera.position.addScaledVector(forward, -moveSpeed);
+                if (keys.a) camera.position.addScaledVector(right, -moveSpeed);
+                if (keys.d) camera.position.addScaledVector(right, moveSpeed);
+
+                camera.position.x = Math.max(-48, Math.min(48, camera.position.x));
+                camera.position.z = Math.max(-48, Math.min(48, camera.position.z));
+
+                if (toolRecoil > 0) {
+                    toolRecoil -= 0.015;
+                } else {
+                    toolRecoil = 0;
+                }
+                
+                if (collectorTool) {
+                    collectorTool.position.z = -0.6 + toolRecoil;
+                }
+
+                if (camera.position.distanceTo(shopTriggerZone.position) < 1.8) {
+                    gameActive = false;
+                    document.exitPointerLock();
+                    showScreen('shop-screen');
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
